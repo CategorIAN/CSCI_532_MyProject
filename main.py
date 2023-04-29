@@ -3,7 +3,9 @@ from ResidualNetwork import ResidualNetwork
 from ResPath import ResPath
 from CSVFlowNetwork import CSVFlowNetwork
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
+from Market import Market
 
 
 def analysis(first, last, step, graph = False):
@@ -66,12 +68,18 @@ def f(i):
         print("BFS Path: {}".format(F.augmentingPathBFS()))
     if i == 2:
         analysis(first = 5, last = 20, step = 5, graph = True)
-    if i == 4:
+    if i == 3:
         G = RandomFlowNetwork(10)
         G.toCSV()
         H = CSVFlowNetwork('FNetwork.csv')
         print(H)
         print(H.n)
+    if i == 4:
+        e = np.array([1, 2, 3])
+        u = np.array([[2, 4], [6, 8], [1, 1]])
+        M = Market(e, u)
+        print(M.equalityGraph(np.array([2, 2])))
+
 
 
 
