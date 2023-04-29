@@ -75,13 +75,11 @@ def f(i):
         print(H)
         print(H.n)
     if i == 4:
-        e = np.array([1, 2, 3])
-        u = np.array([[2, 4], [6, 8], [1, 1]])
+        e = np.array([4, 4])
+        u = np.array([[4, 3, 8], [4, 5, 10]])
         M = Market(e, u)
-        print(M.equalityGraph(np.array([2, 2])))
-
-
-
+        prices = np.array([1, 1, 2])
+        print(M.equalityGraph(prices))
 
 if __name__ == '__main__':
     f(4)
