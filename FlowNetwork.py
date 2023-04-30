@@ -18,14 +18,15 @@ class FlowNetwork:
     def initFlow(self):
         return dict(map(lambda e: (e, 0), self.c.keys()))
 
-    def fordFulkerson(self, EdKarp, count):
+    def fordFulkerson(self, EdKarp = True, count = False):
         @tail_recursive
         def go(flow, i):
             resNetwork = ResidualNetwork(self, flow)
+            #print(EdKarp)
             resPath = resNetwork.augmentingPathBFS() if EdKarp else resNetwork.augmentingPathDFS()
-            print("++++++++++++++++++++++++++++++")
-            print("ResPath: {}".format(resPath))
-            print("++++++++++++++++++++++++++++++")
+            #print("++++++++++++++++++++++++++++++")
+            #print("ResPath: {}".format(resPath))
+            #print("++++++++++++++++++++++++++++++")
             if resPath is None:
                 return (flow, i) if count else flow
             else:

@@ -8,10 +8,10 @@ class PathSet:
         self.paths = sorted(filtered) if sort else filtered
 
     def __str__(self):
-        return "PathSet" + "\n" + "\n".join(str(p) for p in self.paths)
+        return "PathSet:" + "\n" + "\n".join(str(p) for p in self.paths)
 
     def __repr__(self):
-        return "PathSet" + "\n" + "\n".join(str(p) for p in self.paths)
+        return "PathSet:" + "\n" + "\n".join(str(p) for p in self.paths)
 
     def __hash__(self):
         return self.paths
@@ -26,7 +26,7 @@ class PathSet:
             return PathSet(list(map(lambda paths: paths[0] * paths[1], product(self.paths, other.paths))))
 
     def __add__(self, other):
-        return PathSet(self.paths + other.paths)
+        return PathSet(self.paths + other.paths, sort = False)
 
     def filter(self, condition, paths = None):
         paths = self.paths if paths is None else paths

@@ -42,10 +42,13 @@ class ResidualNetwork:
 
     def augmentingPathBFS(self):
         def go(pathset, searched):
+            #print(pathset)
+            #print("Searched: {}".format(searched))
             if len(pathset.paths) == 0:
                 return None
             else:
                 finished = pathset.finishedPath()
+                #print("Finished: {}".format(finished))
                 if finished is not None:
                     return finished
                 else:

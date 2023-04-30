@@ -14,13 +14,14 @@ class Market:
         self.goods = list(range(1, 1 + self.n))
         self.buyers = list(range(1 + self.n, 1 + self.n + self.m))
         self.sink = 1 + self.n + self.m
-        self.buyer_capacity = reduce(lambda c, i: c | {(self.buyers[i], self.sink): self.e[i]}, range(self.m), {})
 
-    def equalityGraph(self, prices):
+    def equalityGraph(self, prices, m = None):
+        m = self.e if m is None else m
         match_capacity = reduce(lambda c, e: c|{e: float("inf")}, self.matches(prices), {})
         good_capacity = reduce(lambda c, j: c|{(self.source, self.goods[j]): prices[j]}, range(self.n), {})
-        capacity = good_capacity|match_capacity|self.buyer_capacity
-        return FlowNetwork(self.source + 1, capacity)
+        buyer_capacity = reduce(lambda c, i: c | {(self.buyers[i], self.sink): m[i]}, range(self.m), {})
+        capacity = good_capacity|match_capacity|buyer_capacity
+        return FlowNetwork(self.sink + 1, capacity)
 
     def matches(self, prices, addAlpha = False):
         beta = np.array(list(map(lambda ui: ui / prices, self.u)))
@@ -63,8 +64,8 @@ class Market:
         return f
 
     def minDecrease(self, m):
-        findMin = lambda x, mi: mi if mi > 1 and (x is None or mi < x) else x
-        return reduce(findMin, m, None) - 1
+        findMin = lambda x, mi: mi if 0 < mi < x else x
+        return reduce(findMin, m, float("inf"))
 
     def adjustedDemand(self, p, m):
         def go(b):
@@ -73,15 +74,16 @@ class Market:
                 return b
             else:
                 delta = (c_t - c_s)
-                d = self.canDecrease(b, delta)
-                r = min(delta // sum(d), self.minDecrease(b))
+                d = np.vectorize(lambda bi: int(bi > 0))(b)
+                r = min(delta / sum(d), self.minDecrease(b))
                 return go(b - r * d)
         return go(m)
 
-    def canDecrease(self, m, delta):
-        dec = lambda v_count, mi: (v_count[0] + [int(mi >= 2)], v_count[1] + int(mi >= 2)) \
-            if v_count[1] < delta else (v_count[0] + [0], delta)
-        return np.array(reduce(dec, m, ([], 0))[0])
+    def adjustNetwork(self, N, m):
+        adjustCapacity = lambda c, i: c|{(self.buyers[i], self.sink): m[i]}
+        newCapacity = reduce(adjustCapacity, range(self.m), N.c)
+        return FlowNetwork(N.n, newCapacity)
+
 
 
 
