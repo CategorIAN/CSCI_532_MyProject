@@ -84,6 +84,35 @@ class Market:
         newCapacity = reduce(adjustCapacity, range(self.m), N.c)
         return FlowNetwork(N.n, newCapacity)
 
+    def inducedNetworks(self, N, S):
+        def direct(c1_c2, e):
+            (x, y) = e
+            if x in S:
+                if y in S:
+                    return (c1_c2[0]|{e:N.c[e]}, c1_c2[1])
+                elif x == self.source:
+                    return (c1_c2[0], c1_c2[1]|{e: N.c[e]})
+                elif y == self.sink:
+                    return (c1_c2[0]|{e:N.c[e]}, c1_c2[1])
+                else:
+                    return c1_c2
+            else:
+                if y not in S:
+                    return (c1_c2[0], c1_c2[1] | {e: N.c[e]})
+                else:
+                    return c1_c2
+        (c1, c2) = reduce(direct, N.c.keys(), ({}, {}))
+        return (FlowNetwork(N.n, c1), FlowNetwork(N.n, c2))
+
+
+    def balancedFlow(self, prices):
+        N = self.equalityGraph(prices)
+        m = self.adjustedDemand(prices, self.e)
+        N_adj = self.adjustNetwork(N, m)
+        f, S = N_adj.fordFulkerson(mincut=True)
+        if S == {self.source}:
+            return f
+
 
 
 

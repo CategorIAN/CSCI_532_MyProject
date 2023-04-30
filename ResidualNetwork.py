@@ -40,12 +40,12 @@ class ResidualNetwork:
             return (ps_s[0] + newPaths, ps_s[1].union({path.head}))
         return reduce(findNew, pathset, (PathSet([]), searched))
 
-    def augmentingPathBFS(self):
+    def augmentingPathBFS(self, mincut = False):
         def go(pathset, searched):
             #print(pathset)
             #print("Searched: {}".format(searched))
             if len(pathset.paths) == 0:
-                return None
+                return searched if mincut else None
             else:
                 finished = pathset.finishedPath()
                 #print("Finished: {}".format(finished))
@@ -55,13 +55,13 @@ class ResidualNetwork:
                     return go(*self.branch(pathset, searched))
         return go(self.neighbor_edges[0], {0})
 
-    def augmentingPathDFS(self):
+    def augmentingPathDFS(self, mincut = False):
         @tail
         def go(pathlist, searched):
             #print("%%%%%%%%%%")
             #print("Paths: {}".format(PathSet(pathlist, sort = False)))
             if len(pathlist) == 0:
-                return None
+                return searched if mincut else None
             else:
                 path = pathlist[0]
                 if path.isDone():

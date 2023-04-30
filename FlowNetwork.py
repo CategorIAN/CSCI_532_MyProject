@@ -3,6 +3,7 @@ from tail_recursive import tail_recursive
 import time
 from functools import reduce
 import pandas as pd
+from ResPath import ResPath
 
 class FlowNetwork:
     def __init__(self, n, capacity):
@@ -15,20 +16,23 @@ class FlowNetwork:
     def __str__(self):
         return "Network" + str(self.c)
 
+    def __repr__(self):
+        return "Network" + str(self.c)
+
     def initFlow(self):
         return dict(map(lambda e: (e, 0), self.c.keys()))
 
-    def fordFulkerson(self, EdKarp = True, count = False):
+    def fordFulkerson(self, EdKarp = True, mincut = False, count = False):
         @tail_recursive
         def go(flow, i):
             resNetwork = ResidualNetwork(self, flow)
             #print(EdKarp)
-            resPath = resNetwork.augmentingPathBFS() if EdKarp else resNetwork.augmentingPathDFS()
+            resPath = resNetwork.augmentingPathBFS(mincut) if EdKarp else resNetwork.augmentingPathDFS(mincut)
             #print("++++++++++++++++++++++++++++++")
             #print("ResPath: {}".format(resPath))
             #print("++++++++++++++++++++++++++++++")
-            if resPath is None:
-                return (flow, i) if count else flow
+            if type(resPath) is not ResPath:
+                return ((flow, resPath, i) if mincut else (flow, i)) if count else ((flow, resPath) if mincut else flow)
             else:
                 return go.tail_call(resNetwork.augmentFlow(resPath, flow), i + 1)
         return go(self.initFlow(), 0)

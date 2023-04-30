@@ -64,39 +64,26 @@ def f(i):
         G = RandomFlowNetwork(10)
         print("G: {}".format(G))
         F = ResidualNetwork(G, G.initFlow())
-        print("DFS Path: {}".format(F.augmentingPathDFS()))
-        print("BFS Path: {}".format(F.augmentingPathBFS()))
+        p = F.augmentingPathBFS()
+        print("Path Type: {}".format(type(p) is ResPath))
+        print("BFS Path: {}".format(p))
     if i == 2:
-        analysis(first = 5, last = 40, step = 5, graph = True)
-    if i == 3:
-        G = RandomFlowNetwork(10)
-        G.toCSV()
-        H = CSVFlowNetwork('FNetwork.csv')
-        print(H)
-        print(H.n)
-    if i == 4:
         e = np.array([4, 4])
         u = np.array([[4, 3, 8], [4, 5, 10]])
         M = Market(e, u)
         prices = M.initialPrices()
-        N = M.equalityGraph(prices)
-        m = M.adjustedDemand(prices, e)
-        N_adj = M.adjustNetwork(N, m)
-        #print(N_adj.sink)
-        #print("N:")
-        #print(N)
-        #print("N'")
-        print(N_adj)
-        f = N_adj.fordFulkerson()
+        f = M.balancedFlow(prices)
         print(f)
-    if i == 5:
-        e = np.array([12, 8])
+    if i == 3:
+        e = np.array([4, 4])
         u = np.array([[4, 3, 8], [4, 5, 10]])
         M = Market(e, u)
-        p = np.array([1, 1, 1])
-        print(M.adjustedDemand(p, e))
+        p = np.array([1, 1, 2])
+        N = M.equalityGraph(p)
+        print(N)
+        print(M.inducedNetworks(N, {0, 1, 2, 4}))
 
 if __name__ == '__main__':
-    f(4)
+    f(3)
 
 
