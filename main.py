@@ -80,8 +80,15 @@ def f(i):
         M = Market(e, u)
         prices = np.array([1, 1, 2])
         print(M.equalityGraph(prices))
+        print(M.initialPrices())
+    if i == 5:
+        e = np.array([12, 8])
+        u = np.array([[4, 3, 8], [4, 5, 10]])
+        M = Market(e, u)
+        p = np.array([1, 1, 1])
+        print(M.adjustedDemand(p, e))
 
 if __name__ == '__main__':
-    f(4)
+    f(5)
 
 
