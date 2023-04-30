@@ -16,7 +16,7 @@ class ResidualNetwork:
         #print("Residual Edges:")
         #print(self.edges)
         add_neighbor = lambda d, edge: d|{edge.path[0]: d.get(edge.path[0], PathSet([])) + PathSet([edge])}
-        self.neighbor_edges = reduce(add_neighbor, self.edges, dict([(v, PathSet([])) for v in range(fNetwork.n)]))
+        self.neighbor_edges = reduce(add_neighbor, self.edges, dict([(v, PathSet([])) for v in fNetwork.V]))
 
     def direct(self, edge, flip):
         return (edge[1], edge[0]) if flip else edge

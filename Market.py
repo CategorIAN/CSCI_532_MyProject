@@ -14,6 +14,7 @@ class Market:
         self.goods = list(range(1, 1 + self.n))
         self.buyers = list(range(1 + self.n, 1 + self.n + self.m))
         self.sink = 1 + self.n + self.m
+        self.V = {self.source, self.sink}|set(self.goods)|set(self.buyers)
 
     def equalityGraph(self, prices, m = None):
         m = self.e if m is None else m
@@ -21,7 +22,7 @@ class Market:
         good_capacity = reduce(lambda c, j: c|{(self.source, self.goods[j]): prices[j]}, range(self.n), {})
         buyer_capacity = reduce(lambda c, i: c | {(self.buyers[i], self.sink): m[i]}, range(self.m), {})
         capacity = good_capacity|match_capacity|buyer_capacity
-        return FlowNetwork(self.sink + 1, capacity)
+        return FlowNetwork(capacity = capacity, source=self.source, sink=self.sink, V=self.V)
 
     def matches(self, prices, addAlpha = False):
         beta = np.array(list(map(lambda ui: ui / prices, self.u)))
@@ -82,18 +83,16 @@ class Market:
     def adjustNetwork(self, N, m):
         adjustCapacity = lambda c, i: c|{(self.buyers[i], self.sink): m[i]}
         newCapacity = reduce(adjustCapacity, range(self.m), N.c)
-        return FlowNetwork(N.n, newCapacity)
+        return FlowNetwork(newCapacity, N.source, N.sink, N.V)
 
     def inducedNetworks(self, N, S):
         def direct(c1_c2, e):
             (x, y) = e
             if x in S:
-                if y in S:
+                if y in S.union({self.sink}):
                     return (c1_c2[0]|{e:N.c[e]}, c1_c2[1])
                 elif x == self.source:
                     return (c1_c2[0], c1_c2[1]|{e: N.c[e]})
-                elif y == self.sink:
-                    return (c1_c2[0]|{e:N.c[e]}, c1_c2[1])
                 else:
                     return c1_c2
             else:
@@ -102,16 +101,21 @@ class Market:
                 else:
                     return c1_c2
         (c1, c2) = reduce(direct, N.c.keys(), ({}, {}))
-        return (FlowNetwork(N.n, c1), FlowNetwork(N.n, c2))
-
+        T = N.V.difference(S)
+        return (FlowNetwork(c1, N.source, N.sink, S|{N.sink}), FlowNetwork(c2, N.source, N.sink, T|{N.source}))
 
     def balancedFlow(self, prices):
-        N = self.equalityGraph(prices)
-        m = self.adjustedDemand(prices, self.e)
-        N_adj = self.adjustNetwork(N, m)
-        f, S = N_adj.fordFulkerson(mincut=True)
-        if S == {self.source}:
-            return f
+        def go(N):
+            print(N)
+            m = self.adjustedDemand(prices, self.e)
+            N_adj = self.adjustNetwork(N, m)
+            f, S = N_adj.fordFulkerson(mincut=True)
+            if S == {self.source}:
+                return f
+            else:
+                N1, N2 = self.inducedNetworks(N, S)
+                return go(N1)|go(N2)
+        return go(self.equalityGraph(prices))
 
 
 

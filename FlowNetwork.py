@@ -6,11 +6,11 @@ import pandas as pd
 from ResPath import ResPath
 
 class FlowNetwork:
-    def __init__(self, n, capacity):
-        self.n = n
-        self.source = 0
-        self.sink = n - 1
-        self.intNodes = set(range(1, n - 1))
+    def __init__(self, capacity, source = None, sink = None, V = None):
+        self.source = source if source is not None else min(V)
+        self.sink = sink if sink is not None else max(V)
+        self.intNodes = set(range(source + 1, sink)) if V is None else V.difference({source, sink})
+        self.V = {self.source, self.sink}|self.intNodes if V is None else V
         self.c = capacity
 
     def __str__(self):

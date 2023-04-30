@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from Market import Market
+from RandomizedMarket import RandomizedMarket
 
 
 def analysis(first, last, step, graph = False):
@@ -82,8 +83,13 @@ def f(i):
         N = M.equalityGraph(p)
         print(N)
         print(M.inducedNetworks(N, {0, 1, 2, 4}))
+    if i == 4:
+        M = RandomizedMarket(2, 3)
+        prices = M.initialPrices()
+        f = M.balancedFlow(prices)
+        print(f)
 
 if __name__ == '__main__':
-    f(3)
+    f(4)
 
 
