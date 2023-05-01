@@ -2,6 +2,7 @@ import numpy as np
 from functools import reduce
 from FlowNetwork import FlowNetwork
 import math
+from tail_recursive import tail_recursive as tail
 
 class Market:
     def __init__(self, e, u):
@@ -39,6 +40,7 @@ class Market:
 
     def initialPrices(self):
         def go(prices):
+            print("prices: {}".format(prices))
             priceAdjuster = self.adjustedPrice(prices)
             def go2(js):
                 if len(js) == 0:
@@ -46,6 +48,8 @@ class Market:
                 else:
                     j = js[0]
                     newPrice = priceAdjuster(j)
+                    print("j: {}".format(j))
+                    print("New Price: {}".format(newPrice))
                     return go2(js[1:]) if newPrice is None else self.updatedVector(prices, j, newPrice)
             adjusted = go2(list(range(self.n)))
             return prices if adjusted is None else go(adjusted)
@@ -61,6 +65,7 @@ class Market:
             for match in matchEdges:
                 if good == match[0]:
                     return None
+            print(prices[j] == max(self.u[:, j]/alpha))
             return max(self.u[:, j]/alpha)
         return f
 
@@ -106,11 +111,10 @@ class Market:
 
     def balancedFlow(self, prices):
         def go(N):
-            print(N)
             m = self.adjustedDemand(prices, self.e)
             N_adj = self.adjustNetwork(N, m)
             f, S = N_adj.fordFulkerson(mincut=True)
-            if S == {self.source}:
+            if S == {self.source} or N.V.difference(S) == {self.sink}:
                 return f
             else:
                 N1, N2 = self.inducedNetworks(N, S)
