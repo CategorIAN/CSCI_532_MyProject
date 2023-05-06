@@ -84,10 +84,18 @@ def f(i):
         print(N)
         print(M.inducedNetworks(N, {0, 1, 2, 4}))
     if i == 4:
-        M = RandomizedMarket(2, 3)
+        for j in range(10):
+            print("==============================================================================================")
+            M = RandomizedMarket(2, 3)
+            prices = M.initialPrices()
+            print(prices)
+    if i == 5:
+        e = np.array([29, 36])
+        u = np.array([[27, 50, 26], [13, 13, 43]])
+        M = Market(e, u)
         prices = M.initialPrices()
-        f = M.balancedFlow(prices)
-        print(f)
+        print(prices)
+
 
 if __name__ == '__main__':
     f(4)

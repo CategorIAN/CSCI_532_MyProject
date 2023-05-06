@@ -26,21 +26,25 @@ class Market:
         return FlowNetwork(capacity = capacity, source=self.source, sink=self.sink, V=self.V)
 
     def matches(self, prices, addAlpha = False):
-        beta = np.array(list(map(lambda ui: ui / prices, self.u)))
-        alpha = np.array(list(map(lambda i: max(beta[i]), range(self.m))))
+        beta = np.round(np.array(list(map(lambda ui: ui / prices, self.u))))
+        alpha = np.round(np.array(list(map(lambda i: max(beta[i]), range(self.m)))))
         matchEdges = reduce(lambda s1, s2: s1 | s2, map(self.addGoods(alpha, beta), range(self.m)))
         return (matchEdges, alpha) if addAlpha else matchEdges
 
     def addGoods(self, alpha, beta):
         def f(i):
             alpha_i, beta_i = (alpha[i], beta[i])
-            addGood = lambda gs, j_x: gs|{(self.goods[j_x[0]], self.buyers[i])} if j_x[1] == alpha_i else gs
+            def addGood(gs, j_x):
+
+                if abs(j_x[1] - alpha_i) < 0.001:
+                    return gs|{(self.goods[j_x[0]], self.buyers[i])}
+                else:
+                    return gs
             return reduce(addGood, zip(range(self.n), beta_i), set())
         return f
 
     def initialPrices(self):
         def go(prices):
-            print("prices: {}".format(prices))
             priceAdjuster = self.adjustedPrice(prices)
             def go2(js):
                 if len(js) == 0:
@@ -48,8 +52,6 @@ class Market:
                 else:
                     j = js[0]
                     newPrice = priceAdjuster(j)
-                    print("j: {}".format(j))
-                    print("New Price: {}".format(newPrice))
                     return go2(js[1:]) if newPrice is None else self.updatedVector(prices, j, newPrice)
             adjusted = go2(list(range(self.n)))
             return prices if adjusted is None else go(adjusted)
@@ -65,7 +67,6 @@ class Market:
             for match in matchEdges:
                 if good == match[0]:
                     return None
-            print(prices[j] == max(self.u[:, j]/alpha))
             return max(self.u[:, j]/alpha)
         return f
 
