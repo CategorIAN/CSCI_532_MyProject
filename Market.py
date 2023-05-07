@@ -3,6 +3,7 @@ from functools import reduce
 from FlowNetwork import FlowNetwork
 import math
 from tail_recursive import tail_recursive as tail
+from EqualityGraph import EqualityGraph
 
 class Market:
     def __init__(self, e, u):
@@ -17,20 +18,6 @@ class Market:
         self.sink = 1 + self.n + self.m
         self.V = {self.source, self.sink}|set(self.goods)|set(self.buyers)
 
-    def equalityGraph(self, prices, m = None):
-        m = self.e if m is None else m
-        match_capacity = reduce(lambda c, e: c|{e: float("inf")}, self.matches(prices), {})
-        good_capacity = reduce(lambda c, j: c|{(self.source, self.goods[j]): prices[j]}, range(self.n), {})
-        buyer_capacity = reduce(lambda c, i: c | {(self.buyers[i], self.sink): m[i]}, range(self.m), {})
-        capacity = good_capacity|match_capacity|buyer_capacity
-        return FlowNetwork(capacity = capacity, source=self.source, sink=self.sink, V=self.V)
-
-    def matches(self, prices, addAlpha = False):
-        beta = np.round(np.array(list(map(lambda ui: ui / prices, self.u))))
-        alpha = np.round(np.array(list(map(lambda i: max(beta[i]), range(self.m)))))
-        matchEdges = reduce(lambda s1, s2: s1 | s2, map(self.addGoods(alpha, beta), range(self.m)))
-        return (matchEdges, alpha) if addAlpha else matchEdges
-
     def addGoods(self, alpha, beta):
         def f(i):
             alpha_i, beta_i = (alpha[i], beta[i])
@@ -42,6 +29,22 @@ class Market:
                     return gs
             return reduce(addGood, zip(range(self.n), beta_i), set())
         return f
+
+    def matches(self, prices, addAlpha = False):
+        beta = np.round(np.array(list(map(lambda ui: ui / prices, self.u))))
+        alpha = np.round(np.array(list(map(lambda i: max(beta[i]), range(self.m)))))
+        matchEdges = reduce(lambda s1, s2: s1 | s2, map(self.addGoods(alpha, beta), range(self.m)))
+        return (matchEdges, alpha) if addAlpha else matchEdges
+
+    def equalityGraph(self, prices, m = None):
+        m = self.e if m is None else m
+        matches = self.matches(prices)
+        match_c = reduce(lambda c, e: c|{e: float("inf")}, matches, {})
+        good_c = reduce(lambda c, j: c|{(self.source, self.goods[j]): prices[j]}, range(self.n), {})
+        buyer_c = reduce(lambda c, i: c | {(self.buyers[i], self.sink): m[i]}, range(self.m), {})
+        capacity = good_c|match_c|buyer_c
+        return EqualityGraph(capacity = capacity, source=self.source, sink=self.sink,
+                             V=self.V, matches = matches, prices = prices)
 
     def initialPrices(self):
         def go(prices):
@@ -110,7 +113,8 @@ class Market:
         T = N.V.difference(S)
         return (FlowNetwork(c1, N.source, N.sink, S|{N.sink}), FlowNetwork(c2, N.source, N.sink, T|{N.source}))
 
-    def balancedFlow(self, prices):
+    def balancedFlow(self, prices, network = None):
+        network = self.equalityGraph(prices) if network is None else network
         def go(N):
             m = self.adjustedDemand(prices, self.e)
             N_adj = self.adjustNetwork(N, m)
@@ -120,7 +124,7 @@ class Market:
             else:
                 N1, N2 = self.inducedNetworks(N, S)
                 return go(N1)|go(N2)
-        return go(self.equalityGraph(prices))
+        return go(network)
 
     def surplus(self, flow):
         return np.vectorize(lambda i: self.e[i] - flow[(self.buyers[i], self.sink)], otypes=[np.float64])(range(self.m))
@@ -133,26 +137,24 @@ class Market:
         appendI = lambda I, i: I|{self.buyers[i]} if surplus[i] == delta else I
         return reduce(appendI, range(self.m), set())
 
-    def neighbors(self, flow):
-        lneighbors = dict(list(map(lambda b: (b, set()), self.buyers)))
-        rneighbors = dict(list(map(lambda g: (g, set()), self.goods)))
-        def addneighbor(ln_rn, e):
-            (g, b) = e
-            if g in self.goods:
-                gs, bs = (ln_rn[0][b]|{g}, ln_rn[1][g]|{b})
-                return (ln_rn[0]|{b: gs}, ln_rn[1]|{g: bs})
-            else:
-                return ln_rn
-        return reduce(addneighbor, flow.keys(), (lneighbors, rneighbors))
-
     def cover(self, collection, A):
         return reduce(lambda B, i: B | collection[i], A , set())
 
-    def J(self, lneighbors, I):
-        return self.cover(lneighbors, I)
+    def J(self, eqG, I):
+        return self.cover(eqG.lneighbors, I)
 
-    def K(self, rneighbors, J):
-        return self.cover(rneighbors, J).difference(self.cover(rneighbors, set(self.goods).difference(J)))
+    def K(self, eqG, J):
+        return self.cover(eqG.rneighbors, J).difference(self.cover(eqG.rneighbors, set(self.goods).difference(J)))
+
+    def newMatches(self, eqG, x, J):
+        inc = np.vectorize(lambda g: x if g in J else 1)(self.goods)
+        print(eqG.prices)
+        newPrices = inc * eqG.prices
+        print(newPrices)
+        matches = self.matches(newPrices)
+        print(matches)
+        return (matches.difference(eqG.matches), eqG.matches.difference(matches))
+
 
 
 
