@@ -90,14 +90,26 @@ def f(i):
             prices = M.initialPrices()
             print(prices)
     if i == 5:
+        print({3, 4}|{6, 7})
         e = np.array([29, 36])
         u = np.array([[27, 50, 26], [13, 13, 43]])
         M = Market(e, u)
         prices = M.initialPrices()
-        print(prices)
+        f = M.balancedFlow(prices)
+        print("f: {}".format(f))
+        print("e: {}".format(M.e))
+        s = M.surplus(f)
+        delta = max(s)
+        I = M.I(s, delta)
+        print(I)
+        ln, rn = M.neighbors(f)
+        J = M.J(ln, I)
+        print(J)
+        I_prime = M.I_prime(rn, J)
+        print(I_prime)
 
 
 if __name__ == '__main__':
-    f(4)
+    f(5)
 
 

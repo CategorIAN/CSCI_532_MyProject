@@ -122,6 +122,41 @@ class Market:
                 return go(N1)|go(N2)
         return go(self.equalityGraph(prices))
 
+    def surplus(self, flow):
+        return np.vectorize(lambda i: self.e[i] - flow[(self.buyers[i], self.sink)], otypes=[np.float64])(range(self.m))
+    def maxSurplus(self, flow):
+        return max(self.surplus(flow))
+    def isEquilibrium(self, flow):
+        return self.maxSurplus(flow) == 0
+
+    def I(self, surplus, delta):
+        appendI = lambda I, i: I|{self.buyers[i]} if surplus[i] == delta else I
+        return reduce(appendI, range(self.m), set())
+
+    def neighbors(self, flow):
+        lneighbors = dict(list(map(lambda b: (b, set()), self.buyers)))
+        rneighbors = dict(list(map(lambda g: (g, set()), self.goods)))
+        def addneighbor(ln_rn, e):
+            (g, b) = e
+            if g in self.goods:
+                gs, bs = (ln_rn[0][b]|{g}, ln_rn[1][g]|{b})
+                return (ln_rn[0]|{b: gs}, ln_rn[1]|{g: bs})
+            else:
+                return ln_rn
+        return reduce(addneighbor, flow.keys(), (lneighbors, rneighbors))
+
+    def cover(self, collection, A):
+        return reduce(lambda B, i: B | collection[i], A , set())
+
+    def J(self, lneighbors, I):
+        return self.cover(lneighbors, I)
+
+    def K(self, rneighbors, J):
+        return self.cover(rneighbors, J).difference(self.cover(rneighbors, set(self.goods).difference(J)))
+
+
+
+
 
 
 
