@@ -90,7 +90,6 @@ def f(i):
             prices = M.initialPrices()
             print(prices)
     if i == 5:
-        print({3, 4}|{6, 7})
         e = np.array([29, 36])
         u = np.array([[27, 50, 26], [13, 13, 43]])
         M = Market(e, u)
@@ -102,12 +101,20 @@ def f(i):
         s = M.surplus(f)
         delta = max(s)
         I = M.I(s, delta)
-        print(I)
+        print("I: {}".format(I))
         J = M.J(N, I)
         print("J: {}".format(J))
-        (m1, m2) = M.newMatches(N, 9, J)
-        print(m1)
-        print(m2)
+        K = M.K(N, J)
+        print("K\I: {}".format(K.difference(I)))
+        newPrices = M.newPrice(N, 9, J)
+        (m1, m2) = M.newMatches(N, newPrices)
+        print("To Add: {}".format(m1))
+        print("To Remove: {}".format(m2))
+        newN = N.swap((m1, m2), newPrices)
+        print(newN)
+        (f, recurse) = M.balancedFlow(newPrices, newN, True)
+        print("New flow: {}".format(f))
+        print("Recurse?: {}".format(recurse))
 
 
 if __name__ == '__main__':

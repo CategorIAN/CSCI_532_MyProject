@@ -14,10 +14,10 @@ class FlowNetwork:
         self.c = capacity
 
     def __str__(self):
-        return "Network" + str(self.c)
+        return "Network" + str(sorted(list(self.c.items())))
 
     def __repr__(self):
-        return "Network" + str(self.c)
+        return "Network" + str(sorted(list(self.c.items())))
 
     def initFlow(self):
         return dict(map(lambda e: (e, 0), self.c.keys()))

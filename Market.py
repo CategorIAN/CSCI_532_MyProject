@@ -39,12 +39,11 @@ class Market:
     def equalityGraph(self, prices, m = None):
         m = self.e if m is None else m
         matches = self.matches(prices)
-        match_c = reduce(lambda c, e: c|{e: float("inf")}, matches, {})
-        good_c = reduce(lambda c, j: c|{(self.source, self.goods[j]): prices[j]}, range(self.n), {})
+        match_c = reduce(lambda c, e: c | {e: float("inf")}, matches, {})
+        good_c = reduce(lambda c, j: c | {(self.source, self.goods[j]): prices[j]}, range(self.n), {})
         buyer_c = reduce(lambda c, i: c | {(self.buyers[i], self.sink): m[i]}, range(self.m), {})
-        capacity = good_c|match_c|buyer_c
-        return EqualityGraph(capacity = capacity, source=self.source, sink=self.sink,
-                             V=self.V, matches = matches, prices = prices)
+        capacity = good_c | match_c | buyer_c
+        return EqualityGraph(capacity=capacity, source=self.source, sink=self.sink, V = self.V, matches = matches, prices = prices)
 
     def initialPrices(self):
         def go(prices):
@@ -113,23 +112,25 @@ class Market:
         T = N.V.difference(S)
         return (FlowNetwork(c1, N.source, N.sink, S|{N.sink}), FlowNetwork(c2, N.source, N.sink, T|{N.source}))
 
-    def balancedFlow(self, prices, network = None):
+    def balancedFlow(self, prices, network = None, showrecurse = False):
         network = self.equalityGraph(prices) if network is None else network
-        def go(N):
+        def go(N, recurse):
             m = self.adjustedDemand(prices, self.e)
             N_adj = self.adjustNetwork(N, m)
             f, S = N_adj.fordFulkerson(mincut=True)
             if S == {self.source} or N.V.difference(S) == {self.sink}:
-                return f
+                return (f, recurse) if showrecurse else f
             else:
                 N1, N2 = self.inducedNetworks(N, S)
-                return go(N1)|go(N2)
-        return go(network)
+                return (go(N1, True)[0]|go(N2, True)[0], True) if showrecurse else go(N1, True)|go(N2, True)
+        return go(network, False)
 
     def surplus(self, flow):
         return np.vectorize(lambda i: self.e[i] - flow[(self.buyers[i], self.sink)], otypes=[np.float64])(range(self.m))
+
     def maxSurplus(self, flow):
         return max(self.surplus(flow))
+
     def isEquilibrium(self, flow):
         return self.maxSurplus(flow) == 0
 
@@ -146,14 +147,22 @@ class Market:
     def K(self, eqG, J):
         return self.cover(eqG.rneighbors, J).difference(self.cover(eqG.rneighbors, set(self.goods).difference(J)))
 
-    def newMatches(self, eqG, x, J):
+    def newPrice(self, eqG, x, J):
         inc = np.vectorize(lambda g: x if g in J else 1)(self.goods)
-        print(eqG.prices)
+        print("Prices: {}".format(eqG.prices))
         newPrices = inc * eqG.prices
-        print(newPrices)
-        matches = self.matches(newPrices)
-        print(matches)
+        print("New Prices: {}".format(newPrices))
+        return newPrices
+
+    def newMatches(self, eqG, prices):
+        matches = self.matches(prices)
+        print("Old Matches: {}".format(eqG.matches))
+        print("New Matches: {}".format(matches))
         return (matches.difference(eqG.matches), eqG.matches.difference(matches))
+
+
+
+
 
 
 
