@@ -20,10 +20,7 @@ class PathSet:
         return iter(self.paths)
 
     def __mul__(self, other):
-        if self.isDone():
-            return self
-        else:
-            return PathSet(list(map(lambda paths: paths[0] * paths[1], product(self.paths, other.paths))))
+        return PathSet(list(map(lambda paths: paths[0] * paths[1], product(self.paths, other.paths))))
 
     def __add__(self, other):
         return PathSet(self.paths + other.paths, sort = False)

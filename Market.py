@@ -4,6 +4,8 @@ from FlowNetwork import FlowNetwork
 import math
 from tail_recursive import tail_recursive as tail
 from EqualityGraph import EqualityGraph
+from PathSet import PathSet
+from ResidualNetwork import ResidualNetwork
 
 class Market:
     def __init__(self, e, u):
@@ -98,16 +100,16 @@ class Market:
             (x, y) = e
             if x in S:
                 if y in S.union({self.sink}):
-                    return (c1_c2[0]|{e:N.c[e]}, c1_c2[1])
+                    return (c1_c2[0]|{e:N.c[e]}, c1_c2[1]|{e:0})
                 elif x == self.source:
-                    return (c1_c2[0], c1_c2[1]|{e: N.c[e]})
+                    return (c1_c2[0]|{e:0}, c1_c2[1]|{e: N.c[e]})
                 else:
-                    return c1_c2
+                    return (c1_c2[0]|{e:0}, c1_c2[1]|{e: 0})
             else:
                 if y not in S:
                     return (c1_c2[0], c1_c2[1] | {e: N.c[e]})
                 else:
-                    return c1_c2
+                    return (c1_c2[0]|{e:0}, c1_c2[1]|{e: 0})
         (c1, c2) = reduce(direct, N.c.keys(), ({}, {}))
         T = N.V.difference(S)
         return (FlowNetwork(c1, N.source, N.sink, S|{N.sink}), FlowNetwork(c2, N.source, N.sink, T|{N.source}))
@@ -121,6 +123,7 @@ class Market:
             if S == {self.source} or N.V.difference(S) == {self.sink}:
                 return (f, recurse) if showrecurse else f
             else:
+                #print("S: {}".format(S))
                 N1, N2 = self.inducedNetworks(N, S)
                 return (go(N1, True)[0]|go(N2, True)[0], True) if showrecurse else go(N1, True)|go(N2, True)
         return go(network, False)
@@ -144,21 +147,73 @@ class Market:
     def J(self, eqG, I):
         return self.cover(eqG.lneighbors, I)
 
-    def K(self, eqG, J):
-        return self.cover(eqG.rneighbors, J).difference(self.cover(eqG.rneighbors, set(self.goods).difference(J)))
+    def K(self, eqG, I, J):
+        S = self.cover(eqG.rneighbors, J).difference(self.cover(eqG.rneighbors, set(self.goods).difference(J)))
+        return S.difference(I)
 
-    def newPrice(self, eqG, x, J):
-        inc = np.vectorize(lambda g: x if g in J else 1)(self.goods)
-        print("Prices: {}".format(eqG.prices))
-        newPrices = inc * eqG.prices
-        print("New Prices: {}".format(newPrices))
-        return newPrices
+    def newPrice(self, eqG, J):
+        def f(x):
+            inc = np.vectorize(lambda g: x if g in J else 1)(self.goods)
+            newPrices = inc * eqG.prices
+            print("Old Prices: {}".format(eqG.prices))
+            print("New Prices: {}".format(newPrices))
+            return newPrices
+        return f
 
     def newMatches(self, eqG, prices):
         matches = self.matches(prices)
         print("Old Matches: {}".format(eqG.matches))
         print("New Matches: {}".format(matches))
         return (matches.difference(eqG.matches), eqG.matches.difference(matches))
+
+    def resNeighbors(self, resN, I):
+        X = reduce(lambda ps, i: ps + resN.neighbor_edges[i], I, PathSet([]))
+        (_, S) = resN.branch(*resN.branch(X, {self.source, self.sink}))
+        return S.intersection(self.buyers)
+
+    def mainAlg(self):
+        prices = self.initialPrices()
+        N = self.equalityGraph(prices)
+        def phase(prices, N):
+            f = self.balancedFlow(prices, N)
+            surplus = self.surplus(f)
+            delta = max(surplus)
+            if delta > 0:
+                def step(N, I):
+                    print("------------------------------------------")
+                    J = self.J(N, I)
+                    K = self.K(N, I, J)
+                    newPrice = self.newPrice(N, J)
+                    def increment(x):
+                        p = newPrice(x)
+                        (m1, m2) = self.newMatches(N, p)
+                        if len(m1) > 0:
+                            newN = N.swap(m1, m2, p)
+                            b = next(iter(m1))[1]
+                            if b in I:
+                                (f, recursed) = self.balancedFlow(p, newN, True)
+                                if recursed:
+                                    resN = ResidualNetwork(newN, f)
+                                    X = self.resNeighbors(resN, I)
+                                    return step(newN, I.union(X))
+                                else:
+                                    print("Final Price Total: {}".format(sum(p)))
+                                    return f
+                            elif b in K:
+                                return step(newN, I)
+                        else:
+                            return increment(x + 1)
+                    return increment(2)
+                return step(N, self.I(surplus, delta))
+        return phase(prices, N)
+
+    def verify(self, flow):
+        totalSupply = reduce(lambda s, g: s + flow[(self.source, g)], self.goods, 0)
+        #totalDemand = reduce(lambda d, b: d + flow[(b, self.sink)], self.buyers, 0)
+        totalDemand = sum(self.e)
+        print("Supply: {}".format(totalSupply))
+        print("Demand: {}".format(totalDemand))
+        return totalSupply == totalDemand
 
 
 

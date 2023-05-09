@@ -30,8 +30,7 @@ class EqualityGraph (FlowNetwork):
         (ln2, rn2) = reduce(delneighbor, delmatches, (ln1, rn1))
         return ln2, rn2
 
-    def swap(self, add_del, newPrices):
-        addMatches, delMatches = add_del
+    def swap(self, addMatches, delMatches, newPrices):
         matches = (self.matches|addMatches).difference(delMatches)
         reduced = dict([(e, self.c[e]) for e in set(self.c.keys()).difference(delMatches)])
         added = dict([(e, float("inf")) for e in addMatches])

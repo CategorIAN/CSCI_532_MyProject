@@ -29,9 +29,7 @@ class ResPath:
         return len(self.path) == len(other.path) and compare(self.path, other.path)
 
     def __mul__(self, other):
-        if self.isDone():
-            return self
-        elif self.head == other.tail and other.head not in self.path:
+        if self.head == other.tail and other.head not in self.path:
             path = self.path + other.path[1:]
             sign = self.sign + other.sign
             res = min(self.res, other.res)

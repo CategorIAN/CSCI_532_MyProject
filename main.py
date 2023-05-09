@@ -115,9 +115,22 @@ def f(i):
         (f, recurse) = M.balancedFlow(newPrices, newN, True)
         print("New flow: {}".format(f))
         print("Recurse?: {}".format(recurse))
+        ResN = ResidualNetwork(newN, f)
+        X = M.resNeighbors(ResN, I)
+        print(X)
+    if i == 6:
+        e = np.array([29, 36])
+        u = np.array([[27, 50, 26], [13, 13, 43]])
+        M = Market(e, u)
+        f = M.mainAlg()
+        print(f)
+        print(M.verify(f))
+
+
+
 
 
 if __name__ == '__main__':
-    f(5)
+    f(6)
 
 
