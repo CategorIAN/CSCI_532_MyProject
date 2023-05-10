@@ -24,7 +24,6 @@ class Market:
         def f(i):
             alpha_i, beta_i = (alpha[i], beta[i])
             def addGood(gs, j_x):
-
                 if abs(j_x[1] - alpha_i) < 0.001:
                     return gs|{(self.goods[j_x[0]], self.buyers[i])}
                 else:
@@ -45,9 +44,11 @@ class Market:
         good_c = reduce(lambda c, j: c | {(self.source, self.goods[j]): prices[j]}, range(self.n), {})
         buyer_c = reduce(lambda c, i: c | {(self.buyers[i], self.sink): m[i]}, range(self.m), {})
         capacity = good_c | match_c | buyer_c
-        return EqualityGraph(capacity=capacity, source=self.source, sink=self.sink, V = self.V, matches = matches, prices = prices)
+        return EqualityGraph(capacity=capacity, source=self.source, sink=self.sink, V = self.V,
+                             prices = prices, goods = self.goods, buyers = self.buyers, matches = matches)
 
-    def initialPrices(self):
+    def myPrices(self, initial = None):
+        initial = 1/self.n * np.ones(self.n) if initial is None else initial
         def go(prices):
             priceAdjuster = self.adjustedPrice(prices)
             def go2(js):
@@ -59,7 +60,7 @@ class Market:
                     return go2(js[1:]) if newPrice is None else self.updatedVector(prices, j, newPrice)
             adjusted = go2(list(range(self.n)))
             return prices if adjusted is None else go(adjusted)
-        return go(1/self.n * np.ones(self.n))
+        return go(initial)
 
     def updatedVector(self, vec, index, newVal):
         return np.vectorize(lambda j: newVal if j == index else vec[j])(np.arange(len(vec)))
@@ -112,7 +113,30 @@ class Market:
                     return (c1_c2[0]|{e:0}, c1_c2[1]|{e: 0})
         (c1, c2) = reduce(direct, N.c.keys(), ({}, {}))
         T = N.V.difference(S)
-        return (FlowNetwork(c1, N.source, N.sink, S|{N.sink}), FlowNetwork(c2, N.source, N.sink, T|{N.source}))
+        return (EqualityGraph(c1, N.source, N.sink, S|{N.sink}, N.prices, N.goods, N.buyers),
+                EqualityGraph(c2, N.source, N.sink, T|{N.source}, N.prices, N.goods, N.buyers))
+
+    def inducedNetworks2(self, N, S):
+        def direct(c1_c2, e):
+            (x, y) = e
+            if x in S:
+                if y in S.union({self.sink}):
+                    return (c1_c2[0]|{e:N.c[e]}, c1_c2[1])  #(x1, x2)
+                elif x == self.source:
+                    return (c1_c2[0], c1_c2[1]|{e: N.c[e]})  #(s, y)
+                else:
+                    return (c1_c2[0], c1_c2[1])       #(x, y) does not work
+            else:
+                if y not in S:
+                    return (c1_c2[0], c1_c2[1] | {e: N.c[e]})  #(y1, y2)
+                else:
+                    return (c1_c2[0], c1_c2[1])           #(y, x) does not work
+        (c1, c2) = reduce(direct, N.c.keys(), ({}, {}))
+        T = N.V.difference(S)
+        return (EqualityGraph(c1, N.source, N.sink, S|{N.sink}, N.prices, S.intersection(N.goods),
+                              S.intersection(N.buyers), lneighbors = N.lneighbors, rneighbors = N.rneighbors),
+                EqualityGraph(c2, N.source, N.sink, T|{N.source}, N.prices, T.intersection(N.goods),
+                              T.intersection(N.buyers), lneighbors = N.lneighbors, rneighbors = N.rneighbors))
 
     def balancedFlow(self, prices, network = None, showrecurse = False):
         network = self.equalityGraph(prices) if network is None else network
@@ -147,23 +171,19 @@ class Market:
     def J(self, eqG, I):
         return self.cover(eqG.lneighbors, I)
 
-    def K(self, eqG, I, J):
+    def K(self, eqG, J):
         S = self.cover(eqG.rneighbors, J).difference(self.cover(eqG.rneighbors, set(self.goods).difference(J)))
-        return S.difference(I)
+        return S
 
-    def newPrice(self, eqG, J):
+    def newPrice(self, prices, J):
         def f(x):
             inc = np.vectorize(lambda g: x if g in J else 1)(self.goods)
-            newPrices = inc * eqG.prices
-            print("Old Prices: {}".format(eqG.prices))
-            print("New Prices: {}".format(newPrices))
+            newPrices = inc * prices
             return newPrices
         return f
 
     def newMatches(self, eqG, prices):
-        matches = self.matches(prices)
-        print("Old Matches: {}".format(eqG.matches))
-        print("New Matches: {}".format(matches))
+        matches = self.matches(prices).intersection(eqG.c.keys())
         return (matches.difference(eqG.matches), eqG.matches.difference(matches))
 
     def resNeighbors(self, resN, I):
@@ -171,41 +191,84 @@ class Market:
         (_, S) = resN.branch(*resN.branch(X, {self.source, self.sink}))
         return S.intersection(self.buyers)
 
+    def tightSet(self, prices, eqG, J):
+        def go(N, A, B):
+            supply = reduce(lambda s, g: s + prices[g - 1], A, 0)
+            demand = reduce(lambda d, b: d + self.e[b - 1 - self.n], B, 0)
+            x = demand / supply
+            print("A, B: {}, {}".format(A, B))
+            print("demand, supply: {}, {}".format(demand, supply))
+            p = self.newPrice(prices, J)(x)
+            (m1, m2) = self.newMatches(N, p)
+            newN = N.swap(m1, m2, p)
+            f, S = newN.fordFulkerson(mincut=True)
+            if S == {self.source} or N.V.difference(S) == {self.sink}:
+                return (x, A)
+            elif len(S.intersection(self.goods)) == len(A):
+                return (x, S.intersection(self.goods))
+            else:
+                X = S.intersection(self.goods)
+                Y = self.K(N, X)
+                print("X, Y: {}, {}".format(X, Y))
+                N1, _ = self.inducedNetworks2(N, X.union(Y))
+                return go(N1, X, Y)
+        return go(eqG, self.goods, self.buyers)
+
     def mainAlg(self):
-        prices = self.initialPrices()
+        prices = self.myPrices()
         N = self.equalityGraph(prices)
-        def phase(prices, N):
+        def phase(prices, tight):
+            print("###############")
+            print("prices: {}".format(prices))
+            N = self.equalityGraph(prices)
             f = self.balancedFlow(prices, N)
+            totalSupply = reduce(lambda s, g: s + f[(self.source, g)], self.goods, 0)
+            print("supply: {}".format(totalSupply))
             surplus = self.surplus(f)
             delta = max(surplus)
+            print("delta: {}".format(delta))
             if delta > 0:
                 def step(N, I):
                     print("------------------------------------------")
                     J = self.J(N, I)
-                    K = self.K(N, I, J)
-                    newPrice = self.newPrice(N, J)
+                    print("N: {}".format(N.c.keys()))
+                    print("J: {}".format(J))
+                    K = self.K(N, J)
+                    newPrice = self.newPrice(prices, J)
+                    y, A = self.tightSet(prices, N, J)
+                    if y == 0:
+                        raise ValueError("y should not be 0")
                     def increment(x):
-                        p = newPrice(x)
-                        (m1, m2) = self.newMatches(N, p)
-                        if len(m1) > 0:
-                            newN = N.swap(m1, m2, p)
-                            b = next(iter(m1))[1]
-                            if b in I:
-                                (f, recursed) = self.balancedFlow(p, newN, True)
-                                if recursed:
-                                    resN = ResidualNetwork(newN, f)
-                                    X = self.resNeighbors(resN, I)
-                                    return step(newN, I.union(X))
-                                else:
-                                    print("Final Price Total: {}".format(sum(p)))
-                                    return f
-                            elif b in K:
-                                return step(newN, I)
+                        if x >= y:
+                            print("Event 1")
+                            print("Tight Set: {}".format(A))
+                            return phase(newPrice(y))
                         else:
-                            return increment(x + 1)
+                            p = newPrice(x)
+                            (m1, m2) = self.newMatches(N, p)
+                            if len(m1) > 0:
+                                newN = N.swap(m1, m2, p)
+                                b = next(iter(m1))[1]
+                                if b in I:
+                                    print("Event 2")
+                                    (f, recursed) = self.balancedFlow(p, newN, True)
+                                    if recursed:
+                                        resN = ResidualNetwork(newN, f)
+                                        X = self.resNeighbors(resN, I)
+                                        return step(newN, I.union(X))
+                                    else:
+                                        print("Final Price Total: {}".format(sum(p)))
+                                        return f
+                                elif b in K:
+                                    print("Event 3")
+                                    return step(newN, I)
+                            else:
+                                return increment(x + 1)
                     return increment(2)
                 return step(N, self.I(surplus, delta))
-        return phase(prices, N)
+            else:
+                return f
+        return phase(prices, set())
 
     def verify(self, flow):
         totalSupply = reduce(lambda s, g: s + flow[(self.source, g)], self.goods, 0)
