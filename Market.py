@@ -6,6 +6,7 @@ from tail_recursive import tail_recursive as tail
 from EqualityGraph import EqualityGraph
 from PathSet import PathSet
 from ResidualNetwork import ResidualNetwork
+from itertools import product
 
 class Market:
     def __init__(self, e, u):
@@ -41,11 +42,11 @@ class Market:
         m = self.e if m is None else m
         matches = self.matches(prices)
         match_c = reduce(lambda c, e: c | {e: float("inf")}, matches, {})
-        good_c = reduce(lambda c, j: c | {(self.source, self.goods[j]): prices[j]}, range(self.n), {})
+        good_c = reduce(lambda c, g: c | {(self.source, g): prices[g - 1]}, self.goods, {})
         buyer_c = reduce(lambda c, i: c | {(self.buyers[i], self.sink): m[i]}, range(self.m), {})
         capacity = good_c | match_c | buyer_c
-        return EqualityGraph(capacity=capacity, source=self.source, sink=self.sink, V = self.V,
-                             prices = prices, goods = self.goods, buyers = self.buyers, matches = matches)
+        return EqualityGraph(capacity=capacity, source=self.source, sink=self.sink, V = self.V, prices = prices,
+                             goods = self.goods, buyers = self.buyers, matches = matches)
 
     def myPrices(self, initial = None):
         initial = 1/self.n * np.ones(self.n) if initial is None else initial
@@ -80,15 +81,20 @@ class Market:
         return reduce(findMin, m, float("inf"))
 
     def adjustedDemand(self, p, m):
+        @tail
         def go(b):
+            print("b: {}".format(b))
             c_s, c_t = (sum(p), sum(b))
-            if c_s == c_t:
+            if abs(c_s - c_t) < 0.001:
                 return b
             else:
                 delta = (c_t - c_s)
                 d = np.vectorize(lambda bi: int(bi > 0))(b)
                 r = min(delta / sum(d), self.minDecrease(b))
-                return go(b - r * d)
+                print("delta: {}".format(delta))
+                print("d: {}".format(d))
+                print("r: {}".format(r))
+                return go.tail_call(b - r * d)
         return go(m)
 
     def adjustNetwork(self, N, m):
@@ -138,10 +144,11 @@ class Market:
                 EqualityGraph(c2, N.source, N.sink, T|{N.source}, N.prices, T.intersection(N.goods),
                               T.intersection(N.buyers), lneighbors = N.lneighbors, rneighbors = N.rneighbors))
 
-    def balancedFlow(self, prices, network = None, showrecurse = False):
+    def balancedFlow(self, prices, network = None, showrecurse = False, mm = None):
+        mm = self.e if mm is None else mm
         network = self.equalityGraph(prices) if network is None else network
         def go(N, recurse):
-            m = self.adjustedDemand(prices, self.e)
+            m = self.adjustedDemand(prices, mm)
             N_adj = self.adjustNetwork(N, m)
             f, S = N_adj.fordFulkerson(mincut=True)
             if S == {self.source} or N.V.difference(S) == {self.sink}:
@@ -152,8 +159,9 @@ class Market:
                 return (go(N1, True)[0]|go(N2, True)[0], True) if showrecurse else go(N1, True)|go(N2, True)
         return go(network, False)
 
-    def surplus(self, flow):
-        return np.vectorize(lambda i: self.e[i] - flow[(self.buyers[i], self.sink)], otypes=[np.float64])(range(self.m))
+    def surplus(self, flow, m = None):
+        m = self.e if m is None else m
+        return np.vectorize(lambda i: m[i] - flow[(self.buyers[i], self.sink)], otypes=[np.float64])(range(self.m))
 
     def maxSurplus(self, flow):
         return max(self.surplus(flow))
@@ -172,8 +180,15 @@ class Market:
         return self.cover(eqG.lneighbors, I)
 
     def K(self, eqG, J):
-        S = self.cover(eqG.rneighbors, J).difference(self.cover(eqG.rneighbors, set(self.goods).difference(J)))
+        X = self.cover(eqG.rneighbors, J)
+        print("X: {}".format(X))
+        Y = self.cover(eqG.rneighbors, set(self.goods).difference(J))
+        print("Y: {}".format(Y))
+        S = X.difference(Y)
         return S
+
+    def Gamma(self, eqG, J):
+        return self.cover(eqG.rneighbors, J)
 
     def newPrice(self, prices, J):
         def f(x):
@@ -191,60 +206,95 @@ class Market:
         (_, S) = resN.branch(*resN.branch(X, {self.source, self.sink}))
         return S.intersection(self.buyers)
 
-    def tightSet(self, prices, eqG, J):
+    def tightSet(self, prices, eqG, J, m):
+        print("-------------------FINDING TIGHT SET--------------------------------")
         def go(N, A, B):
+            print("------------------")
             supply = reduce(lambda s, g: s + prices[g - 1], A, 0)
-            demand = reduce(lambda d, b: d + self.e[b - 1 - self.n], B, 0)
+            demand = reduce(lambda d, b: d + m[b - 1 - self.n], B, 0)
             x = demand / supply
             print("A, B: {}, {}".format(A, B))
             print("demand, supply: {}, {}".format(demand, supply))
             p = self.newPrice(prices, J)(x)
             (m1, m2) = self.newMatches(N, p)
-            newN = N.swap(m1, m2, p)
-            f, S = newN.fordFulkerson(mincut=True)
+            xN = N.swap(m1, m2, p)
+            f, S = xN.fordFulkerson(mincut=True)
+            print("S: {}".format(S))
             if S == {self.source} or N.V.difference(S) == {self.sink}:
+                print("----(s, V-{s}) is a min cut---------------")
                 return (x, A)
-            elif len(S.intersection(self.goods)) == len(A):
-                return (x, S.intersection(self.goods))
             else:
-                X = S.intersection(self.goods)
-                Y = self.K(N, X)
-                print("X, Y: {}, {}".format(X, Y))
-                N1, _ = self.inducedNetworks2(N, X.union(Y))
-                return go(N1, X, Y)
-        return go(eqG, self.goods, self.buyers)
+                A1 = S.intersection(A)
+                if len(A1) == len(A):
+                    print("--------A is not getting any Smaller--------")
+                    print("A, B: {}, {}".format(A, B))
+                    return (x, A)
+                else:
+                    print("--------Recurse on Smaller Set-------------")
+                    B1 = self.Gamma(N, A1)
+                    print("A1, B1: {}, {}".format(A1, B1))
+                    N1, _ = self.inducedNetworks2(N, A1.union(B1))
+                    return go(N1, A1, B1)
+        return go(eqG, J, self.Gamma(eqG, J))
+
+    def initialFlow(self):
+        good_f = dict([((self.source, g), 0) for g in self.goods])
+        buyer_f = dict([((b, self.sink), 0) for b in self.buyers])
+        match_f = dict([((g, b), 0) for (g, b) in product(self.goods, self.buyers)])
+        return good_f|buyer_f|match_f
+
+
+    def addFlows(self, f1, f2):
+        def addFlow(f, e):
+            if e in f1:
+                if e in f2:
+                    return f|{e: f1[e] + f2[e]}
+                else:
+                    return f|{e: f1[e]}
+            else:
+                if e in f2:
+                    return f|{e: f2[e]}
+                else:
+                    return f
+        return reduce(addFlow, set(f1.keys()).union(set(f2.keys())), {})
 
     def mainAlg(self):
-        prices = self.myPrices()
-        N = self.equalityGraph(prices)
-        def phase(prices, tight):
-            print("###############")
-            print("prices: {}".format(prices))
-            N = self.equalityGraph(prices)
-            f = self.balancedFlow(prices, N)
-            totalSupply = reduce(lambda s, g: s + f[(self.source, g)], self.goods, 0)
-            print("supply: {}".format(totalSupply))
-            surplus = self.surplus(f)
-            delta = max(surplus)
+        def phase(cumulative_prices, cumulative_N, cumulative_flow, m):
+            print("------PHASE-----------------")
+            print("cumulative prices: {}".format(cumulative_prices))
+            print("Network:")
+            print(cumulative_N.frame(cumulative_flow))
+            print("supply: {}".format(self.supply(cumulative_N, cumulative_flow)))
+            print("m: {}".format(m))
+            delta = max(m)
             print("delta: {}".format(delta))
             if delta > 0:
                 def step(N, I):
-                    print("------------------------------------------")
+                    print("--------------STEP------------------")
                     J = self.J(N, I)
-                    print("N: {}".format(N.c.keys()))
-                    print("J: {}".format(J))
                     K = self.K(N, J)
-                    newPrice = self.newPrice(prices, J)
-                    y, A = self.tightSet(prices, N, J)
+                    print("I, J, K: {}, {}, {}".format(I, J, K))
+                    newPrice_func = self.newPrice(prices, J)
+                    y, A = self.tightSet(prices, N, J, m)
                     if y == 0:
                         raise ValueError("y should not be 0")
+                    @tail
                     def increment(x):
                         if x >= y:
                             print("Event 1")
-                            print("Tight Set: {}".format(A))
-                            return phase(newPrice(y))
+                            print("y, Tight Set: {}, {}".format(y, A))
+                            added = newPrice_func(y)
+                            (m1, m2) = self.newMatches(N, added)
+                            xN = N.swap(m1, m2, added)
+                            new_prices = cumulative_prices + added
+                            new_N = self.equalityGraph(new_prices, self.e)
+                            added_f = self.balancedFlow(added, xN, mm = m)
+                            new_f = self.addFlows(cumulative_flow, added_f)
+                            print("New Flow: {}".format(new_f))
+                            new_m = self.surplus(added_f, m)
+                            return phase(new_prices, new_N, new_f, new_m)
                         else:
-                            p = newPrice(x)
+                            p = newPrice_func(x)
                             (m1, m2) = self.newMatches(N, p)
                             if len(m1) > 0:
                                 newN = N.swap(m1, m2, p)
@@ -263,12 +313,21 @@ class Market:
                                     print("Event 3")
                                     return step(newN, I)
                             else:
-                                return increment(x + 1)
+                                return increment.tail_call(x + 1)
                     return increment(2)
-                return step(N, self.I(surplus, delta))
+                prices = self.myPrices()
+                N = self.equalityGraph(prices, m)
+                return step(N, self.I(m, delta))
             else:
                 return f
-        return phase(prices, set())
+        prices = self.myPrices()
+        N = self.equalityGraph(prices, self.e)
+        f = self.addFlows(self.initialFlow(), self.balancedFlow(prices, N))
+        m = self.surplus(f)
+        return phase(cumulative_prices = prices, cumulative_N = N, cumulative_flow = f, m = m)
+
+    def supply(self, N, flow):
+        return reduce(lambda s, e: s + int(e[0] == self.source) * flow[e], N.c.keys(), 0)
 
     def verify(self, flow):
         totalSupply = reduce(lambda s, g: s + flow[(self.source, g)], self.goods, 0)
